@@ -33,6 +33,48 @@
             font-size: 0.9rem;
         }
 
+        .week-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .week-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .week-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .week-btn.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-color: #3b82f6;
+            box-shadow: 0 5px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .week-btn-label {
+            font-weight: 600;
+        }
+
+        .week-btn-dates {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+
         .dashboard {
             display: flex;
             justify-content: center;
@@ -400,7 +442,8 @@
 </head>
 <body>
     <h1>Team Scheduler</h1><br><br>
-    
+
+    <div class="week-selector" id="week-selector"></div>
 
     <div class="dashboard" id="dashboard"></div>
 
@@ -442,10 +485,61 @@
 
         const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
-        // State: person -> array of WFH days
-        let wfhSchedule = {};
-        // State: person -> array of leave days
-        let leaveSchedule = {};
+        // Current selected week (0 = this week, 1 = next week)
+        let selectedWeek = 0;
+
+        // State: weekKey -> { wfh: { person -> days[] }, leave: { person -> days[] } }
+        let allSchedules = {};
+
+        // Get current week's schedule - ensures the week exists in allSchedules
+        function ensureWeekExists(weekOffset = selectedWeek) {
+            const weekKey = getWeekKey(weekOffset);
+            if (!allSchedules[weekKey]) {
+                allSchedules[weekKey] = { wfh: {}, leave: {} };
+            }
+            return weekKey;
+        }
+
+        // Helper to get current wfh/leave schedules
+        function getCurrentSchedules() {
+            const weekKey = ensureWeekExists();
+            return {
+                wfh: allSchedules[weekKey].wfh,
+                leave: allSchedules[weekKey].leave
+            };
+        }
+
+        // Calculate the Monday of a given week offset (0 = this week, 1 = next week)
+        function getWeekMonday(weekOffset = 0) {
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust for Sunday
+            const monday = new Date(today);
+            monday.setDate(today.getDate() + diff + (weekOffset * 7));
+            monday.setHours(0, 0, 0, 0);
+            return monday;
+        }
+
+        // Get a unique key for a week (YYYY-MM-DD of Monday)
+        function getWeekKey(weekOffset = 0) {
+            const monday = getWeekMonday(weekOffset);
+            return monday.toISOString().split('T')[0];
+        }
+
+        // Format date range for display
+        function getWeekDateRange(weekOffset = 0) {
+            const monday = getWeekMonday(weekOffset);
+            const friday = new Date(monday);
+            friday.setDate(monday.getDate() + 4);
+
+            const formatDate = (d) => {
+                const day = d.getDate();
+                const month = d.toLocaleDateString('en-US', { month: 'short' });
+                return `${day} ${month}`;
+            };
+
+            return `${formatDate(monday)} - ${formatDate(friday)}`;
+        }
 
         function getInitials(name) {
             return name.split(' ').map(n => n[0]).join('').substring(0, 2);
@@ -461,6 +555,7 @@
             person.draggable = true;
             person.dataset.name = name;
 
+            const { wfh: wfhSchedule } = getCurrentSchedules();
             const wfhDays = wfhSchedule[name] || [];
 
             person.innerHTML = `
@@ -545,6 +640,7 @@
             if (!targetZone) return;
 
             const targetDay = targetZone.dataset.day;
+            const { wfh: wfhSchedule, leave: leaveSchedule } = getCurrentSchedules();
 
             if (!wfhSchedule[name]) {
                 wfhSchedule[name] = [];
@@ -598,6 +694,7 @@
             if (!targetZone) return;
 
             const targetDay = targetZone.dataset.day;
+            const { wfh: wfhSchedule, leave: leaveSchedule } = getCurrentSchedules();
 
             if (!leaveSchedule[name]) {
                 leaveSchedule[name] = [];
@@ -635,6 +732,7 @@
             const name = e.dataTransfer.getData('text/plain');
             const sourceDay = e.dataTransfer.getData('source');
             const sourceType = e.dataTransfer.getData('sourceType');
+            const { wfh: wfhSchedule, leave: leaveSchedule } = getCurrentSchedules();
 
             if (sourceType === 'wfh') {
                 wfhSchedule[name] = wfhSchedule[name].filter(d => d !== sourceDay);
@@ -648,6 +746,7 @@
         }
 
         function getOfficeCount(day) {
+            const { wfh: wfhSchedule, leave: leaveSchedule } = getCurrentSchedules();
             let notInOfficeCount = 0;
             let onLeaveCount = 0;
 
@@ -694,8 +793,35 @@
             }).join('');
         }
 
+        function renderWeekSelector() {
+            const selector = document.getElementById('week-selector');
+            selector.innerHTML = [0, 1].map(weekOffset => {
+                const label = weekOffset === 0 ? 'This Week' : 'Next Week';
+                const dates = getWeekDateRange(weekOffset);
+                const activeClass = selectedWeek === weekOffset ? 'active' : '';
+
+                return `
+                    <button class="week-btn ${activeClass}" data-week="${weekOffset}">
+                        <span class="week-btn-label">${label}</span>
+                        <span class="week-btn-dates">${dates}</span>
+                    </button>
+                `;
+            }).join('');
+
+            // Add click handlers
+            selector.querySelectorAll('.week-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    selectedWeek = parseInt(btn.dataset.week);
+                    render();
+                });
+            });
+        }
+
         function render() {
+            renderWeekSelector();
             renderDashboard();
+
+            const { wfh: wfhSchedule, leave: leaveSchedule } = getCurrentSchedules();
 
             // Render people pool
             const pool = document.getElementById('people-pool');
@@ -786,18 +912,30 @@
         }
 
         function saveState() {
-            localStorage.setItem('wfhSchedule', JSON.stringify(wfhSchedule));
-            localStorage.setItem('leaveSchedule', JSON.stringify(leaveSchedule));
+            localStorage.setItem('allSchedules', JSON.stringify(allSchedules));
         }
 
         function loadState() {
-            const savedWfh = localStorage.getItem('wfhSchedule');
-            if (savedWfh) {
-                wfhSchedule = JSON.parse(savedWfh);
+            const saved = localStorage.getItem('allSchedules');
+            if (saved) {
+                allSchedules = JSON.parse(saved);
             }
-            const savedLeave = localStorage.getItem('leaveSchedule');
-            if (savedLeave) {
-                leaveSchedule = JSON.parse(savedLeave);
+
+            // Migration: if old format exists, migrate it to new format
+            const oldWfh = localStorage.getItem('wfhSchedule');
+            const oldLeave = localStorage.getItem('leaveSchedule');
+            if (oldWfh || oldLeave) {
+                const thisWeekKey = getWeekKey(0);
+                if (!allSchedules[thisWeekKey]) {
+                    allSchedules[thisWeekKey] = {
+                        wfh: oldWfh ? JSON.parse(oldWfh) : {},
+                        leave: oldLeave ? JSON.parse(oldLeave) : {}
+                    };
+                }
+                // Clean up old storage
+                localStorage.removeItem('wfhSchedule');
+                localStorage.removeItem('leaveSchedule');
+                saveState();
             }
         }
 
