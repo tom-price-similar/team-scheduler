@@ -399,8 +399,8 @@
     </style>
 </head>
 <body>
-    <h1>WFH Scheduler</h1>
-    <p class="subtitle">Drag people to their WFH days • Each person gets exactly 2 WFH days per week</p>
+    <h1>Team Scheduler</h1><br><br>
+    
 
     <div class="dashboard" id="dashboard"></div>
 
@@ -413,10 +413,7 @@
         <div class="schedule" id="schedule"></div>
     </div>
 
-    <p class="instructions">
-        💡 Drag team members from the left panel to assign their WFH days.
-        Drag between days to reassign. The dashboard shows office attendance for each day.
-    </p>
+    
 
     <div class="error-msg" id="error-msg"></div>
 
@@ -753,7 +750,7 @@
                         </div>
                     </div>
                     <div class="wfh-zone" data-day="${day}">
-                        <h3>🏠 WFH (${wfhPeople.length})</h3>
+                        <h3>🏠 AWAY (${wfhPeople.length})</h3>
                     </div>
                     <div class="in-office-list">
                         <h3>In Office (${officePeople.length})</h3>
